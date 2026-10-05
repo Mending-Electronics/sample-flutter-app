@@ -12,7 +12,12 @@ Ce projet Flutter a été créé pour le développement cross-platform sur Fedor
 - **Linux**: Compilation native via GCC
 - **Web**: Compilation JavaScript via dart2js (compatible Microsoft Edge)
 - **Windows**: Compilation à exécuter dans une VM Windows configurée avec Visual Studio Build Tools
+- **macOS**: Compilation via GitHub Actions sur un runner macOS
+- **iOS**: Compilation via GitHub Actions sur un runner macOS, sans signature
 
+Le workflow GitHub Actions compile et publie les artefacts Android, Linux, Windows,
+macOS et iOS. Le build iOS est non signé; la signature et la distribution sur
+appareil nécessitent un certificat et un profil de provisioning Apple.
 ### Scripts de test
 
 Utilisez les scripts suivants pour tester chaque plateforme:
