@@ -15,9 +15,17 @@ Ce projet Flutter a été créé pour le développement cross-platform sur Fedor
 - **macOS**: Compilation via GitHub Actions sur un runner macOS
 - **iOS**: Compilation via GitHub Actions sur un runner macOS, sans signature
 
-Le workflow GitHub Actions compile et publie les artefacts Android, Linux, Windows,
-macOS et iOS. Le build iOS est non signé; la signature et la distribution sur
-appareil nécessitent un certificat et un profil de provisioning Apple.
+Le workflow GitHub Actions compile Android, Linux, Windows, macOS, iOS et Web.
+Lorsqu'un tag `v*` est poussé, il crée une release GitHub publiée avec les archives
+des six builds en pièces jointes et des notes générées automatiquement. Le build iOS
+est non signé; la signature et la distribution sur appareil nécessitent un certificat
+et un profil de provisioning Apple.
+
+Pour activer l'analyse SonarQube Cloud, définir les variables de dépôt
+`SONAR_ORGANIZATION` et `SONAR_PROJECT_KEY`, ainsi que le secret `SONAR_TOKEN`.
+Le job est ignoré tant que les deux variables ne sont pas définies; le secret est
+également nécessaire pour que l'analyse réussisse.
+
 ### Scripts de test
 
 Utilisez les scripts suivants pour tester chaque plateforme:
