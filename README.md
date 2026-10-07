@@ -122,19 +122,35 @@ is pushed, GitHub Actions automatically:
 3. Creates a GitHub Release
 4. Uploads all generated packages
 
-Example:
+Pushing a new SemVer version in `sample_flutter_app/pubspec.yaml` to `main`
+also creates the matching `vX.Y.Z` tag and publishes the release in that same
+workflow run. Only the SemVer portion is used; changing only the `+build`
+number does not create another release. The tag is created after successful
+tests and builds, and the release job requires `contents: write` permission.
+
+To release by changing the manifest:
 
 ```bash
-git tag v1.0.0
-git push origin v1.0.0
+# Set version: 1.1.0+1 in sample_flutter_app/pubspec.yaml
+git add sample_flutter_app/pubspec.yaml
+git commit -m "Release v1.1.0"
+git push origin main
+```
+
+You can also continue to create and push a `v*` tag manually; that tag still
+triggers the release workflow:
+
+```bash
+git tag v1.1.0
+git push origin v1.1.0
 ```
 
 Result:
 
-- Release v1.0.0 created automatically
+- Release v1.1.0 created automatically
 - All compiled binaries attached to the release page, with archives named
-  `flutter-<platform>-v1.0.0.zip`
-- The application reports `v1.0.0` as its version and checks for a newer stable release
+  `flutter-<platform>-v1.1.0.zip`
+- The application reports `v1.1.0` as its version and checks for a newer stable release
 
 Use `vX.Y.Z` for stable releases and suffixes such as `vX.Y.Z-beta.1`,
 `vX.Y.Z-alpha.1`, or `vX.Y.Z-rc.1` for prereleases. The release workflow marks

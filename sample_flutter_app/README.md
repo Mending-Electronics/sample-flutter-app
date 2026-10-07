@@ -16,10 +16,17 @@ Ce projet Flutter a été créé pour le développement cross-platform sur Fedor
 - **iOS**: Compilation via GitHub Actions sur un runner macOS, sans signature
 
 Le workflow GitHub Actions compile Android, Linux, Windows, macOS, iOS et Web.
-Lorsqu'un tag `v*` est poussé, il crée une release GitHub publiée avec les archives
-des six builds en pièces jointes et des notes générées automatiquement. Le build iOS
-est non signé; la signature et la distribution sur appareil nécessitent un certificat
-et un profil de provisioning Apple.
+Lorsqu'une nouvelle version SemVer de `pubspec.yaml` est poussée sur `main`, le
+workflow crée le tag `vX.Y.Z` après la réussite des tests et des builds, puis publie
+la release et les archives des six builds dans la même exécution. Seule la partie
+SemVer est utilisée : modifier uniquement le numéro `+build` ne crée pas de nouvelle
+release. Les tags `v*` poussés manuellement continuent également à déclencher une
+release. Le build iOS est non signé; la signature et la distribution sur appareil
+nécessitent un certificat et un profil de provisioning Apple.
+
+Pour publier en modifiant le manifeste, mettez par exemple `version: 1.2.0+1` dans
+`pubspec.yaml`, puis committez et poussez sur `main`. Le job de publication crée le
+tag et la release avec la permission `contents: write`.
 
 `pubspec.yaml` est la source canonique de la version locale, lue depuis les
 métadonnées de la plateforme. Les builds CI issus d'un tag SemVer injectent le tag

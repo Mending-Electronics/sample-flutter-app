@@ -26,6 +26,95 @@ jobs:
       - name: Run tests
         run: flutter test
 
+  version:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      build_name: ${{ steps.resolve.outputs.build_name }}
+      channel: ${{ steps.resolve.outputs.channel }}
+      tag: ${{ steps.resolve.outputs.tag }}
+      should_release: ${{ steps.resolve.outputs.should_release }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Resolve version and release tag
+        id: resolve
+        shell: bash
+        env:
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          semver_pattern='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'
+          manifest_version="$(sed -n 's/^version: *\([^[:space:]]*\).*/\1/p' sample_flutter_app/pubspec.yaml)"
+          if [[ ! "$manifest_version" =~ $semver_pattern ]]; then
+            echo "Invalid SemVer in sample_flutter_app/pubspec.yaml: $manifest_version" >&2
+            exit 1
+          fi
+
+          should_release=false
+          tag=""
+          version="${manifest_version%%+*}"
+
+          if [[ "$GITHUB_EVENT_NAME" == "push" && "$GITHUB_REF_TYPE" == "tag" ]]; then
+            tag="$GITHUB_REF_NAME"
+            version="${tag#v}"
+            if [[ "$tag" != v* || ! "$version" =~ $semver_pattern ]]; then
+              echo "Release tags must use the vX.Y.Z SemVer format: $tag" >&2
+              exit 1
+            fi
+            should_release=true
+          elif [[ "$GITHUB_EVENT_NAME" == "push" && "$GITHUB_REF" == "refs/heads/main" ]]; then
+            previous_manifest_version=""
+            if [[ -n "$PUSH_BEFORE" && "$PUSH_BEFORE" != "0000000000000000000000000000000000000000" ]]; then
+              if ! git cat-file -e "$PUSH_BEFORE^{commit}"; then
+                echo "Could not find the previous commit $PUSH_BEFORE." >&2
+                exit 1
+              fi
+              previous_manifest_version="$(
+                git show "$PUSH_BEFORE:sample_flutter_app/pubspec.yaml" |
+                  sed -n 's/^version: *\([^[:space:]]*\).*/\1/p'
+              )"
+            fi
+
+            current_release_version="${manifest_version%%+*}"
+            previous_release_version="${previous_manifest_version%%+*}"
+            if [[ -n "$previous_release_version" && "$current_release_version" != "$previous_release_version" ]]; then
+              version="$current_release_version"
+              tag="v$version"
+              should_release=true
+            fi
+          fi
+
+          version_without_build="${version%%+*}"
+          if [[ "$version_without_build" == *-* ]]; then
+            build_name="${version_without_build%%-*}"
+            channel="${version_without_build#*-}"
+            channel="${channel%%.*}"
+            case "$channel" in
+              alpha|beta|rc) ;;
+              *) channel="pre-release" ;;
+            esac
+          else
+            build_name="$version_without_build"
+            channel="development"
+            if [[ "$should_release" == "true" ]]; then
+              channel="released"
+            fi
+          fi
+
+          app_version="$version"
+          if [[ "$should_release" == "true" ]]; then
+            app_version="v$version"
+          fi
+
+          {
+            echo "version=$app_version"
+            echo "build_name=$build_name"
+            echo "channel=$channel"
+            echo "tag=$tag"
+            echo "should_release=$should_release"
+          } >> "$GITHUB_OUTPUT"
+
   sonarqube:
     needs: [test, build]
     if: >-
@@ -60,7 +149,7 @@ jobs:
             -Dsonar.tests=test
 
   build:
-    needs: test
+    needs: [test, version]
     strategy:
       fail-fast: false
       matrix:
@@ -105,46 +194,13 @@ jobs:
           distribution: temurin
           java-version: '17'
       - run: flutter pub get
-      - name: Resolve app version
-        id: app-version
-        shell: bash
-        run: |
-          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
-            version="$GITHUB_REF_NAME"
-            normalized_version="${version#v}"
-            build_name="${normalized_version%%[-+]*}"
-            if [[ "$normalized_version" == *-* ]]; then
-              channel="${normalized_version#*-}"
-              channel="${channel%%.*}"
-              case "$channel" in
-                alpha|beta|rc) ;;
-                *) channel="pre-release" ;;
-              esac
-            else
-              channel="released"
-            fi
-          else
-            version="$(sed -n 's/^version: \([^+ ]*\).*/\1/p' pubspec.yaml)"
-            build_name="$version"
-            channel="development"
-          fi
-
-          if [[ -z "$version" || -z "$build_name" ]]; then
-            echo "Could not resolve the app version." >&2
-            exit 1
-          fi
-
-          {
-            echo "version=$version"
-            echo "build_name=$build_name"
-            echo "channel=$channel"
-          } >> "$GITHUB_OUTPUT"
       - name: Build release
         if: matrix.platform != 'ios'
+        shell: bash
         env:
-          APP_VERSION: ${{ steps.app-version.outputs.version }}
-          APP_BUILD_NAME: ${{ steps.app-version.outputs.build_name }}
-          APP_RELEASE_CHANNEL: ${{ steps.app-version.outputs.channel }}
+          APP_VERSION: ${{ needs.version.outputs.version }}
+          APP_BUILD_NAME: ${{ needs.version.outputs.build_name }}
+          APP_RELEASE_CHANNEL: ${{ needs.version.outputs.channel }}
         run: |
           flutter build ${{ matrix.platform }} --release \
             --build-name="$APP_BUILD_NAME" \
@@ -155,9 +211,9 @@ jobs:
       - name: Build iOS release without code signing
         if: matrix.platform == 'ios'
         env:
-          APP_VERSION: ${{ steps.app-version.outputs.version }}
-          APP_BUILD_NAME: ${{ steps.app-version.outputs.build_name }}
-          APP_RELEASE_CHANNEL: ${{ steps.app-version.outputs.channel }}
+          APP_VERSION: ${{ needs.version.outputs.version }}
+          APP_BUILD_NAME: ${{ needs.version.outputs.build_name }}
+          APP_RELEASE_CHANNEL: ${{ needs.version.outputs.channel }}
         run: |
           flutter build ios --release --no-codesign \
             --build-name="$APP_BUILD_NAME" \
@@ -173,11 +229,12 @@ jobs:
           retention-days: 7
 
   release:
-    needs: [test, build, sonarqube]
+    needs: [test, build, sonarqube, version]
     if: >-
       ${{
         always() &&
-        startsWith(github.ref, 'refs/tags/v') &&
+        needs.version.result == 'success' &&
+        needs.version.outputs.should_release == 'true' &&
         needs.test.result == 'success' &&
         needs.build.result == 'success' &&
         (needs.sonarqube.result == 'success' || needs.sonarqube.result == 'skipped')
@@ -186,11 +243,16 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
       - name: Download build artifacts
         uses: actions/download-artifact@v5
         with:
           path: release-assets
       - name: Archive build artifacts
+        env:
+          RELEASE_TAG: ${{ needs.version.outputs.tag }}
         run: |
           compgen -G "release-assets/flutter-*" >/dev/null || {
             echo "No Flutter build artifacts were downloaded." >&2
@@ -198,15 +260,33 @@ jobs:
           }
           for artifact_dir in release-assets/flutter-*; do
             if [ -d "$artifact_dir" ]; then
-              zip -r "${artifact_dir}-${GITHUB_REF_NAME}.zip" "$artifact_dir"
+              zip -r "${artifact_dir}-${RELEASE_TAG}.zip" "$artifact_dir"
             fi
           done
+      - name: Create or verify release tag
+        env:
+          RELEASE_TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git ls-remote --exit-code --refs origin "refs/tags/$RELEASE_TAG" >/dev/null; then
+            git fetch --no-tags origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
+            existing_commit="$(git rev-parse "$RELEASE_TAG^{commit}")"
+            if [ "$existing_commit" != "$GITHUB_SHA" ]; then
+              echo "Tag $RELEASE_TAG already points to a different commit ($existing_commit)." >&2
+              exit 1
+            fi
+          else
+            git tag -a "$RELEASE_TAG" "$GITHUB_SHA" -m "Release $RELEASE_TAG"
+            git push origin "refs/tags/$RELEASE_TAG"
+          fi
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          name: ${{ github.ref_name }}
+          tag_name: ${{ needs.version.outputs.tag }}
+          name: ${{ needs.version.outputs.tag }}
           generate_release_notes: true
           draft: false
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          prerelease: ${{ contains(needs.version.outputs.tag, '-') }}
           files: release-assets/*.zip
