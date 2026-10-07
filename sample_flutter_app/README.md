@@ -21,6 +21,19 @@ des six builds en pièces jointes et des notes générées automatiquement. Le b
 est non signé; la signature et la distribution sur appareil nécessitent un certificat
 et un profil de provisioning Apple.
 
+`pubspec.yaml` est la source canonique de la version locale, lue depuis les
+métadonnées de la plateforme. Les builds CI issus d'un tag SemVer injectent le tag
+complet dans l'application, utilisent sa partie numérique comme version native
+et affichent son canal (`released`, `beta`, `alpha`, `rc` ou `pre-release`). Un
+build exécuté en mode debug affiche `Debug`. Les archives de release portent le
+tag en suffixe, par exemple `flutter-apk-v1.2.0.zip`. Les tags avec suffixe
+(`v1.2.0-beta.1`) sont publiés en tant que prereleases.
+
+Au démarrage, l'application interroge l'API publique GitHub pour rechercher une
+release stable plus récente. Si elle existe, un badge donne accès à sa page de tag.
+Les plateformes Android et macOS autorisent explicitement l'accès réseau sortant.
+Une vérification qui échoue est signalée dans l'interface et peut être relancée.
+
 Pour activer l'analyse SonarQube Cloud, définir les variables de dépôt
 `SONAR_ORGANIZATION` et `SONAR_PROJECT_KEY`, ainsi que le secret `SONAR_TOKEN`.
 Le job est ignoré tant que les deux variables ne sont pas définies; le secret est

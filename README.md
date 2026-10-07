@@ -132,7 +132,23 @@ git push origin v1.0.0
 Result:
 
 - Release v1.0.0 created automatically
-- All compiled binaries attached to the release page
+- All compiled binaries attached to the release page, with archives named
+  `flutter-<platform>-v1.0.0.zip`
+- The application reports `v1.0.0` as its version and checks for a newer stable release
+
+Use `vX.Y.Z` for stable releases and suffixes such as `vX.Y.Z-beta.1`,
+`vX.Y.Z-alpha.1`, or `vX.Y.Z-rc.1` for prereleases. The release workflow marks
+hyphenated tags as prereleases.
+
+The Flutter `pubspec.yaml` version is the canonical local version and is read
+from the platform metadata. Tagged GitHub builds inject the tag as the displayed
+app version, use its numeric SemVer portion for the native app version, and
+derive the displayed release channel from the tag. Debug runs identify
+themselves as `Debug`.
+
+The app checks GitHub's public latest-release API on startup. It only announces
+a newer stable release; when one is available, its badge links to that release's
+tag page. This check needs no GitHub token.
 
 ---
 

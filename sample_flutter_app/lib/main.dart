@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:sample_flutter_app/services/app_version_widget.dart';
+import 'package:sample_flutter_app/services/version_update_service.dart';
 
 void main() {
   runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  const MyApp({super.key, this.releaseService = const VersionUpdateService()});
+
+  final VersionUpdateService releaseService;
 
   // This widget is the root of your application.
   @override
@@ -30,13 +34,20 @@ class MyApp extends StatelessWidget {
         // tested with just a hot reload.
         colorScheme: .fromSeed(seedColor: Colors.deepPurple),
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: MyHomePage(
+        title: 'Flutter Demo Home Page',
+        releaseService: releaseService,
+      ),
     );
   }
 }
 
 class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
+  const MyHomePage({
+    super.key,
+    required this.title,
+    required this.releaseService,
+  });
 
   // This widget is the home page of your application. It is stateful, meaning
   // that it has a State object (defined below) that contains fields that affect
@@ -48,6 +59,7 @@ class MyHomePage extends StatefulWidget {
   // always marked "final".
 
   final String title;
+  final VersionUpdateService releaseService;
 
   @override
   State<MyHomePage> createState() => _MyHomePageState();
@@ -109,6 +121,8 @@ class _MyHomePageState extends State<MyHomePage> {
               '$_counter',
               style: Theme.of(context).textTheme.headlineMedium,
             ),
+            const SizedBox(height: 24),
+            AppVersionWidget(releaseService: widget.releaseService),
           ],
         ),
       ),

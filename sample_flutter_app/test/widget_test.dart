@@ -7,17 +7,40 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import 'package:sample_flutter_app/main.dart';
+import 'package:sample_flutter_app/services/version_update_service.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  setUp(() {
+    PackageInfo.setMockInitialValues(
+      appName: 'sample_flutter_app',
+      packageName: 'sample_flutter_app',
+      version: '1.0.0',
+      buildNumber: '1',
+      buildSignature: '',
+    );
+  });
 
-    // Verify that our counter starts at 0.
+  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
+    final releaseService = VersionUpdateService(
+      client: MockClient(
+        (_) async => http.Response(
+          '{"tag_name":"v1.0.0"}',
+          200,
+          headers: {'content-type': 'application/json'},
+        ),
+      ),
+    );
+    await tester.pumpWidget(MyApp(releaseService: releaseService));
+
+    await tester.pumpAndSettle();
     expect(find.text('0'), findsOneWidget);
     expect(find.text('1'), findsNothing);
+    expect(find.text('Version 1.0.0'), findsOneWidget);
 
     // Tap the '+' icon and trigger a frame.
     await tester.tap(find.byIcon(Icons.add));
@@ -26,5 +49,21 @@ void main() {
     // Verify that our counter has incremented.
     expect(find.text('0'), findsNothing);
     expect(find.text('1'), findsOneWidget);
+  });
+
+  testWidgets('shows a badge when a newer release is available', (
+    WidgetTester tester,
+  ) async {
+    final releaseService = VersionUpdateService(
+      client: MockClient(
+        (_) async => http.Response('{"tag_name":"v1.1.0"}', 200),
+      ),
+    );
+
+    await tester.pumpWidget(MyApp(releaseService: releaseService));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Nouvelle version disponible v1.1.0'), findsOneWidget);
+    expect(find.text('Voir la release GitHub'), findsOneWidget);
   });
 }

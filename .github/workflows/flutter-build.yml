@@ -105,12 +105,66 @@ jobs:
           distribution: temurin
           java-version: '17'
       - run: flutter pub get
+      - name: Resolve app version
+        id: app-version
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            version="$GITHUB_REF_NAME"
+            normalized_version="${version#v}"
+            build_name="${normalized_version%%[-+]*}"
+            if [[ "$normalized_version" == *-* ]]; then
+              channel="${normalized_version#*-}"
+              channel="${channel%%.*}"
+              case "$channel" in
+                alpha|beta|rc) ;;
+                *) channel="pre-release" ;;
+              esac
+            else
+              channel="released"
+            fi
+          else
+            version="$(sed -n 's/^version: \([^+ ]*\).*/\1/p' pubspec.yaml)"
+            build_name="$version"
+            channel="development"
+          fi
+
+          if [[ -z "$version" || -z "$build_name" ]]; then
+            echo "Could not resolve the app version." >&2
+            exit 1
+          fi
+
+          {
+            echo "version=$version"
+            echo "build_name=$build_name"
+            echo "channel=$channel"
+          } >> "$GITHUB_OUTPUT"
       - name: Build release
         if: matrix.platform != 'ios'
-        run: flutter build ${{ matrix.platform }} --release
+        env:
+          APP_VERSION: ${{ steps.app-version.outputs.version }}
+          APP_BUILD_NAME: ${{ steps.app-version.outputs.build_name }}
+          APP_RELEASE_CHANNEL: ${{ steps.app-version.outputs.channel }}
+        run: |
+          flutter build ${{ matrix.platform }} --release \
+            --build-name="$APP_BUILD_NAME" \
+            --build-number="$GITHUB_RUN_NUMBER" \
+            --dart-define="APP_VERSION=$APP_VERSION" \
+            --dart-define="APP_RELEASE_CHANNEL=$APP_RELEASE_CHANNEL" \
+            --dart-define="APP_REPOSITORY=$GITHUB_REPOSITORY"
       - name: Build iOS release without code signing
         if: matrix.platform == 'ios'
-        run: flutter build ios --release --no-codesign
+        env:
+          APP_VERSION: ${{ steps.app-version.outputs.version }}
+          APP_BUILD_NAME: ${{ steps.app-version.outputs.build_name }}
+          APP_RELEASE_CHANNEL: ${{ steps.app-version.outputs.channel }}
+        run: |
+          flutter build ios --release --no-codesign \
+            --build-name="$APP_BUILD_NAME" \
+            --build-number="$GITHUB_RUN_NUMBER" \
+            --dart-define="APP_VERSION=$APP_VERSION" \
+            --dart-define="APP_RELEASE_CHANNEL=$APP_RELEASE_CHANNEL" \
+            --dart-define="APP_REPOSITORY=$GITHUB_REPOSITORY"
       - uses: actions/upload-artifact@v5
         with:
           name: flutter-${{ matrix.platform }}
@@ -144,7 +198,7 @@ jobs:
           }
           for artifact_dir in release-assets/flutter-*; do
             if [ -d "$artifact_dir" ]; then
-              zip -r "${artifact_dir}.zip" "$artifact_dir"
+              zip -r "${artifact_dir}-${GITHUB_REF_NAME}.zip" "$artifact_dir"
             fi
           done
       - name: Publish GitHub release
@@ -154,5 +208,5 @@ jobs:
           name: ${{ github.ref_name }}
           generate_release_notes: true
           draft: false
-          prerelease: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
           files: release-assets/*.zip
